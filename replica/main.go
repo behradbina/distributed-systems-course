@@ -21,9 +21,10 @@ type ValueRecord struct {
 }
 
 type Config struct {
-	ID    string            `json:"id"`
-	Port  string            `json:"port"`
-	Peers map[string]string `json:"peers"`
+	ID        string            `json:"id"`
+	Port      string            `json:"port"`
+	Peers     map[string]string `json:"peers"`
+	IsPrimary bool             `json:"is_primary"`
 }
 
 type ReplicaServer struct {
@@ -62,6 +63,7 @@ func main() {
 	mux.HandleFunc("/put", server.handlePut)
 	mux.HandleFunc("/replicate", server.handleReplicate)
 	mux.HandleFunc("/set_latency", server.handleSetLatency)
+	mux.HandleFunc("/strong_get", server.handleStrongGet)
 
 	fmt.Printf("[%s] Server booting up on port %s...\n", server.config.ID, server.config.Port)
 	if err := http.ListenAndServe(server.config.Port, mux); err != nil {
@@ -206,6 +208,51 @@ func (s *ReplicaServer) handleSetLatency(w http.ResponseWriter, r *http.Request)
 	s.latencyMs = req.LatencyMs
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *ReplicaServer) handleStrongGet(w http.ResponseWriter, r *http.Request) {
+
+	key := r.URL.Query().Get("key")
+
+	if key == "" {
+		http.Error(w, "missing key", http.StatusBadRequest)
+		return
+	}
+
+	// If already primary
+	if s.config.IsPrimary {
+
+		s.mu.RLock()
+		record, ok := s.store[key]
+		s.mu.RUnlock()
+
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+
+		json.NewEncoder(w).Encode(record)
+		return
+	}
+
+	// Forward to primary
+	resp, err := http.Get(
+		"http://localhost:8081/strong_get?key=" + key,
+	)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+
+	var body interface{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	json.NewEncoder(w).Encode(body)
 }
 
 func (s *ReplicaServer) sendReplicationMessage(peerUrl string, record ValueRecord) bool {

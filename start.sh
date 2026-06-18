@@ -2,7 +2,7 @@
 
 # Configuration: Ensure logs directory exists if needed
 echo "================================================================="
-# Clean up background tasks instantly if the script drops out or you hit Ctrl+C
+# Clean up background tasks instantly if the script drops out or Ctrl+C
 cleanup() {
     echo -e "\n[Orchestrator] Tearing down background replica processes safely..."
     kill $PID1 $PID2 $PID3 2>/dev/null

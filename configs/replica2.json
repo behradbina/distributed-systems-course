@@ -1,6 +1,7 @@
 {
   "id": "replica2",
   "port": ":8082",
+  "is_primary": false,
   "peers": {
     "replica1": "http://localhost:8081",
     "replica3": "http://localhost:8083"

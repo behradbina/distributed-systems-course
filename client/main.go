@@ -20,6 +20,9 @@ func main() {
 	fmt.Println("              DISTRIBUTED SYSTEMS SCENARIO ENGINE               ")
 	fmt.Println("=================================================================")
 
+	runStrongGetScenario()
+	
+
 	runScenario1()
 	runScenario2()
 	runScenario3()
@@ -177,4 +180,45 @@ func runScenario4() {
 			fmt.Printf(" [Strong Mode]   Client PUT Latency: %v | Quorum Verification: Instant convergence achieved at client return.\n", strongDur)
 		}
 	}
+}
+
+
+func runStrongGetScenario() {
+	fmt.Println("\n>>> Running Strong GET Scenario")
+	setLatency(R1, 1000)
+	setLatency(R2, 1000)
+	setLatency(R3, 1000)
+
+	fmt.Println("[Client] Writing key 'z' = 'strong_value' via Replica 1 (Strong Mode)...")
+	putKey(R1, "z", "strong_value", "strong")
+
+	fmt.Println("[Client] Performing strong GET for key 'z' from Replica 2...")
+	val, ver, ok := strongGet(R2, "z")
+	if ok {
+		fmt.Printf(" [STRONG GET] Replica 2 returned value: '%s' with version: %d\n", val, ver)
+	} else {
+		fmt.Println(" [STRONG GET] Failed to retrieve value from Replica 2.")
+	}
+}
+
+
+func strongGet(replica, key string) (string, int, bool) {
+
+	resp, err := http.Get(
+		replica + "/strong_get?key=" + key,
+	)
+
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return "", 0, false
+	}
+
+	defer resp.Body.Close()
+
+	var body map[string]interface{}
+
+	json.NewDecoder(resp.Body).Decode(&body)
+
+	return body["value"].(string),
+		int(body["version"].(float64)),
+		true
 }
