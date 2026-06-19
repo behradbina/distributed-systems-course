@@ -88,6 +88,13 @@ func (s *ReplicaServer) handleGet(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Key not found"})
 		return
 	}
+
+	fmt.Printf("[%s] GET key='%s' -> value='%s', version=%d\n",
+		s.config.ID,
+		key,
+		record.Value,
+		record.Version,
+	)
 	json.NewEncoder(w).Encode(record)
 }
 
@@ -115,6 +122,14 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 	s.store[req.Key] = newRecord
 	s.mu.Unlock()
 
+	fmt.Printf("[%s] PUT received: key='%s', value='%s', mode='%s', version=%d\n",
+		s.config.ID,
+		req.Key,
+		req.Value,
+		req.ConsistencyMode,
+		newRecord.Version,
+	)
+
 	if req.ConsistencyMode == "strong" {
 		// Strong consistency: Synchronously confirm write with a majority quorum (2 out of 3 replicas total)
 		acks := 1 // Initializing with 1 to count local write success
@@ -136,10 +151,20 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 
 		// A quorum of 2 nodes out of 3 is required
 		if acks >= 2 {
+				fmt.Printf("[%s] STRONG WRITE SUCCESS key='%s' quorum=%d/3\n",
+					s.config.ID,
+					req.Key,
+					acks,
+				)
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "record": newRecord, "replicas_updated": acks})
 		} else {
 			// Roll back state if majority write consensus fails
+			fmt.Printf("[%s] STRONG WRITE FAILED key='%s' quorum=%d/3\n",
+				s.config.ID,
+				req.Key,
+				acks,
+			)
 			s.mu.Lock()
 			if s.store[req.Key].Version == newRecord.Version && s.store[req.Key].UpdatedBy == s.config.ID {
 				delete(s.store, req.Key)
@@ -151,7 +176,13 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 		// Eventual Consistency: Asynchronously propagate updates to background workers
 		for _, peerUrl := range s.config.Peers {
 			go func(url string) {
-				s.sendReplicationMessage(url, newRecord)
+				if s.sendReplicationMessage(url, newRecord) {
+					fmt.Printf("[%s] Eventual replication sent key='%s' to %s\n",
+						s.config.ID,
+						newRecord.Key,
+						url,
+					)
+				}
 			}(peerUrl)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -165,6 +196,14 @@ func (s *ReplicaServer) handleReplicate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	fmt.Printf("[%s] Replication received key='%s', value='%s', version=%d from %s\n",
+		s.config.ID,
+		incoming.Key,
+		incoming.Value,
+		incoming.Version,
+		incoming.UpdatedBy,
+	)
 
 	// Apply configured network latency simulation
 	s.mu.RLock()
@@ -184,6 +223,13 @@ func (s *ReplicaServer) handleReplicate(w http.ResponseWriter, r *http.Request) 
 	} else if incoming.Version == local.Version {
 		// Conflict Resolution: Last-Write-Wins strategy (LWW) utilizing UnixNano timestamps
 		if incoming.Timestamp > local.Timestamp {
+
+			fmt.Printf("[%s] Conflict resolved (LWW): key='%s' chose value='%s'\n",
+				s.config.ID,
+				incoming.Key,
+				incoming.Value,
+			)
+
 			s.store[incoming.Key] = incoming
 		} else if incoming.Timestamp == local.Timestamp {
 			// Deterministic Tie-Breaker: Choose lexicographically higher Unique Replica IDs
@@ -231,9 +277,22 @@ func (s *ReplicaServer) handleStrongGet(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		fmt.Printf("[%s] Primary serving strong GET key='%s' value='%s' version=%d\n",
+			s.config.ID,
+			key,
+			record.Value,
+			record.Version,
+		)
+
 		json.NewEncoder(w).Encode(record)
 		return
 	}
+
+	fmt.Printf("[%s] Strong GET forwarded to primary for key='%s'\n",
+		s.config.ID,
+		key,
+	)
+
 
 	// Forward to primary
 	resp, err := http.Get(
@@ -263,5 +322,15 @@ func (s *ReplicaServer) sendReplicationMessage(peerUrl string, record ValueRecor
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	success := resp.StatusCode == http.StatusOK
+
+	if success {
+		fmt.Printf("[%s] Replication ACK received from %s for key='%s'\n",
+			s.config.ID,
+			peerUrl,
+			record.Key,
+		)
+	}
+
+	return success
 }
