@@ -2,6 +2,6 @@
 >>> Running Scenario 2: Replica Failure
 [Simulation] Note: Replica 3 will be treated as failed (simulated by missing responses).
 [Client] Testing Eventual consistency with Replica 3 down...
- -> Eventual PUT Status: Success=false, Time=591.231µs
+ -> Eventual PUT Status: Success=true, Time=824.954µs
 [Client] Testing Strong consistency with Replica 3 down...
- -> Strong PUT Status: Success=false, Replicas Synced=0, Time=457.534µs
+ -> Strong PUT Status: Success=true, Replicas Synced=3, Time=2.069237ms
