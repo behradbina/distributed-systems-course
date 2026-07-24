@@ -166,9 +166,14 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 				acks,
 			)
 			s.mu.Lock()
-			if s.store[req.Key].Version == newRecord.Version && s.store[req.Key].UpdatedBy == s.config.ID {
-				delete(s.store, req.Key)
-			}
+			if s.store[req.Key].Version == newRecord.Version && 
+				s.store[req.Key].UpdatedBy == s.config.ID {
+					if currentRecord.Key != "" {
+						s.store[req.Key] = currentRecord
+					} else {
+						delete(s.store, req.Key)
+					}
+				}
 			s.mu.Unlock()
 			http.Error(w, "Strong write failed: Quorum agreement not met", http.StatusServiceUnavailable)
 		}
@@ -288,6 +293,19 @@ func (s *ReplicaServer) handleStrongGet(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var primaryURL string
+    for id, url := range s.config.Peers {
+        if id == "replica1" {
+            primaryURL = url
+            break
+        }
+    }
+
+    if primaryURL == "" {
+        http.Error(w, "Primary replica not found", http.StatusServiceUnavailable)
+        return
+    }
+
 	fmt.Printf("[%s] Strong GET forwarded to primary for key='%s'\n",
 		s.config.ID,
 		key,
@@ -295,23 +313,19 @@ func (s *ReplicaServer) handleStrongGet(w http.ResponseWriter, r *http.Request) 
 
 
 	// Forward to primary
-	resp, err := http.Get(
-		"http://localhost:8081/strong_get?key=" + key,
-	)
+    resp, err := http.Get(primaryURL + "/strong_get?key=" + key)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusServiceUnavailable)
+        return
+    }
+    defer resp.Body.Close()
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
-	}
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(resp.StatusCode)
 
-	defer resp.Body.Close()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-
-	var body interface{}
-	json.NewDecoder(resp.Body).Decode(&body)
-	json.NewEncoder(w).Encode(body)
+    var body interface{}
+    json.NewDecoder(resp.Body).Decode(&body)
+    json.NewEncoder(w).Encode(body)
 }
 
 func (s *ReplicaServer) sendReplicationMessage(peerUrl string, record ValueRecord) bool {
