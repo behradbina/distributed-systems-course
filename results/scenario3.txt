@@ -1,0 +1,6 @@
+
+>>> Running Scenario 3: Concurrent Conflict
+[Client] Racing concurrent writes across different replication endpoints...
+[Client] Waiting 2 seconds for conflict resolution cycles to settle...
+ -> Final states: Replica1='', Replica2='', Replica3=''
+ [SUCCESS] Cluster reached uniform agreement via conflict resolution strategy.

@@ -1,0 +1,22 @@
+
+>>> Running Scenario 4: Effect of Network Latency (eventual)
+
+--- Testing Latency Configuration: 0ms ---
+ [eventual] PUT FAILED
+
+--- Testing Latency Configuration: 500ms ---
+ [eventual] PUT FAILED
+
+--- Testing Latency Configuration: 2000ms ---
+ [eventual] PUT FAILED
+
+>>> Running Scenario 4: Effect of Network Latency (strong)
+
+--- Testing Latency Configuration: 0ms ---
+ [strong] PUT FAILED
+
+--- Testing Latency Configuration: 500ms ---
+ [strong] PUT FAILED
+
+--- Testing Latency Configuration: 2000ms ---
+ [strong] PUT FAILED

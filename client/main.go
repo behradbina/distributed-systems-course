@@ -1,5 +1,6 @@
 package main
 
+import "os"
 import (
 	"bytes"
 	"encoding/json"
@@ -16,17 +17,20 @@ const (
 )
 
 func main() {
-	fmt.Println("=================================================================")
-	fmt.Println("              DISTRIBUTED SYSTEMS SCENARIO ENGINE               ")
-	fmt.Println("=================================================================")
+	runAndSave("scenario1.txt", runScenario1)
 
-	runStrongGetScenario()
-	
+	runAndSave("scenario2.txt", runScenario2)
 
-	runScenario1()
-	runScenario2()
-	runScenario3()
-	runScenario4()
+	runAndSave("scenario3.txt", runScenario3)
+
+	runAndSave("scenario4.txt", func() {
+		runScenario4("eventual")
+		runScenario4("strong")
+	})
+
+	runAndSave("strong_get.txt", runStrongGetScenario)
+
+	fmt.Println("All scenario outputs have been saved.")
 }
 
 func setLatency(replica string, ms int) {
@@ -137,51 +141,68 @@ func runScenario3() {
 	}
 }
 
-func runScenario4() {
-	fmt.Println("\n>>> Running Scenario 4: Effect of Network Latency")
+func runScenario4(mode string) {
+	fmt.Printf("\n>>> Running Scenario 4: Effect of Network Latency (%s)\n", mode)
+
 	latencies := []int{0, 500, 2000}
 
 	for _, lat := range latencies {
+
 		fmt.Printf("\n--- Testing Latency Configuration: %dms ---\n", lat)
+
 		setLatency(R1, lat)
 		setLatency(R2, lat)
 		setLatency(R3, lat)
 
-		// Eventual Metrics Benchmarking
-		startE := time.Now()
-		putKey(R1, "lat_key", "val_"+fmt.Sprint(lat), "eventual")
-		putDuration := time.Since(startE)
+		key := fmt.Sprintf("%s_key_%d", mode, lat)
+		value := fmt.Sprintf("%s_val_%d", mode, lat)
+
+		start := time.Now()
+
+		updated, _, ok := putKey(R1, key, value, mode)
+
+		putDuration := time.Since(start)
+
+		if !ok {
+			fmt.Printf(" [%s] PUT FAILED\n", mode)
+			continue
+		}
 
 		staleCount := 0
 		var convergenceTime time.Duration
 
 		checkStart := time.Now()
+
 		for {
-			v2, _, _ := getKey(R2, "lat_key")
-			v3, _, _ := getKey(R3, "lat_key")
-			if v2 == "val_"+fmt.Sprint(lat) && v3 == "val_"+fmt.Sprint(lat) {
+
+			v2, _, _ := getKey(R2, key)
+			v3, _, _ := getKey(R3, key)
+
+			if v2 == value && v3 == value {
 				convergenceTime = time.Since(checkStart)
 				break
 			}
+
 			staleCount++
+
 			time.Sleep(50 * time.Millisecond)
-			if time.Since(checkStart) > 5*time.Second {
-				fmt.Println(" [TIMEOUT] Convergence did not occur within threshold.")
+
+			if time.Since(checkStart) > 10*time.Second {
+				fmt.Println(" [TIMEOUT] Convergence not reached.")
 				break
 			}
 		}
-		fmt.Printf(" [Eventual Mode] Client PUT Latency: %v | Cluster Convergence Time: %v | Stale Reads Intercepted: %d\n", putDuration, convergenceTime, staleCount)
 
-		// Strong Metrics Benchmarking - Corrected to use startS
-		startS := time.Now()
-		_, _, ok := putKey(R1, "strong_lat_key", "strong_"+fmt.Sprint(lat), "strong")
-		strongDur := time.Since(startS)
-		if ok {
-			fmt.Printf(" [Strong Mode]   Client PUT Latency: %v | Quorum Verification: Instant convergence achieved at client return.\n", strongDur)
-		}
+		fmt.Printf(
+			" [%s] PUT Latency=%v | Convergence=%v | Stale Reads=%d | Replicas Updated=%d\n",
+			mode,
+			putDuration,
+			convergenceTime,
+			staleCount,
+			updated,
+		)
 	}
 }
-
 
 func runStrongGetScenario() {
 	fmt.Println("\n>>> Running Strong GET Scenario")
@@ -221,4 +242,22 @@ func strongGet(replica, key string) (string, int, bool) {
 	return body["value"].(string),
 		int(body["version"].(float64)),
 		true
+}
+
+func runAndSave(filename string, scenario func()) {
+	old := os.Stdout
+
+	file, err := os.Create("results/" + filename)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	os.Stdout = file
+
+	scenario()
+
+	os.Stdout = old
+
+	fmt.Printf("Saved results/%s\n", filename)
 }
