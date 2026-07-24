@@ -17,7 +17,7 @@ type ValueRecord struct {
 	Value     string `json:"value"`
 	Version   int    `json:"version"`
 	UpdatedBy string `json:"updated_by"`
-	Timestamp int64  `json:"timestamp"` // UnixNano for Last-Write-Wins resolution
+	Timestamp int64  `json:"timestamp"`
 }
 
 type Config struct {
@@ -102,7 +102,7 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Key             string `json:"key"`
 		Value           string `json:"value"`
-		ConsistencyMode string `json:"consistency_mode"` // "eventual" or "strong"
+		ConsistencyMode string `json:"consistency_mode"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -131,8 +131,7 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if req.ConsistencyMode == "strong" {
-		// Strong consistency: Synchronously confirm write with a majority quorum (2 out of 3 replicas total)
-		acks := 1 // Initializing with 1 to count local write success
+		acks := 1
 		var ackMu sync.Mutex
 		var wg sync.WaitGroup
 
@@ -149,7 +148,6 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 		}
 		wg.Wait()
 
-		// A quorum of 2 nodes out of 3 is required
 		if acks >= 2 {
 				fmt.Printf("[%s] STRONG WRITE SUCCESS key='%s' quorum=%d/3\n",
 					s.config.ID,
@@ -159,7 +157,6 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "record": newRecord, "replicas_updated": acks})
 		} else {
-			// Roll back state if majority write consensus fails
 			fmt.Printf("[%s] STRONG WRITE FAILED key='%s' quorum=%d/3\n",
 				s.config.ID,
 				req.Key,
@@ -178,7 +175,6 @@ func (s *ReplicaServer) handlePut(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Strong write failed: Quorum agreement not met", http.StatusServiceUnavailable)
 		}
 	} else {
-		// Eventual Consistency: Asynchronously propagate updates to background workers
 		for _, peerUrl := range s.config.Peers {
 			go func(url string) {
 				if s.sendReplicationMessage(url, newRecord) {
@@ -210,7 +206,6 @@ func (s *ReplicaServer) handleReplicate(w http.ResponseWriter, r *http.Request) 
 		incoming.UpdatedBy,
 	)
 
-	// Apply configured network latency simulation
 	s.mu.RLock()
 	latency := s.latencyMs
 	s.mu.RUnlock()
@@ -223,10 +218,8 @@ func (s *ReplicaServer) handleReplicate(w http.ResponseWriter, r *http.Request) 
 
 	local, exists := s.store[incoming.Key]
 	if !exists || incoming.Version > local.Version {
-		// Rule 1: Always update if incoming data has a higher version structure
 		s.store[incoming.Key] = incoming
 	} else if incoming.Version == local.Version {
-		// Conflict Resolution: Last-Write-Wins strategy (LWW) utilizing UnixNano timestamps
 		if incoming.Timestamp > local.Timestamp {
 
 			fmt.Printf("[%s] Conflict resolved (LWW): key='%s' chose value='%s'\n",
@@ -237,12 +230,11 @@ func (s *ReplicaServer) handleReplicate(w http.ResponseWriter, r *http.Request) 
 
 			s.store[incoming.Key] = incoming
 		} else if incoming.Timestamp == local.Timestamp {
-			// Deterministic Tie-Breaker: Choose lexicographically higher Unique Replica IDs
 			if incoming.UpdatedBy > local.UpdatedBy {
 				s.store[incoming.Key] = incoming
 			}
 		}
-	} // Ignore if incoming.Version < local.Version
+	}
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -270,7 +262,6 @@ func (s *ReplicaServer) handleStrongGet(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// If already primary
 	if s.config.IsPrimary {
 
 		s.mu.RLock()
@@ -312,7 +303,6 @@ func (s *ReplicaServer) handleStrongGet(w http.ResponseWriter, r *http.Request) 
 	)
 
 
-	// Forward to primary
     resp, err := http.Get(primaryURL + "/strong_get?key=" + key)
     if err != nil {
         http.Error(w, err.Error(), http.StatusServiceUnavailable)
