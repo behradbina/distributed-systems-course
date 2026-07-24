@@ -1,4 +1,3 @@
-````markdown
 # Distributed Replicated Key-Value Store
 
 A simple distributed key-value store implemented in **Go** to demonstrate the concepts of **Replication**, **Eventual Consistency**, **Strong Consistency**, **Versioning**, and **Conflict Resolution**.
