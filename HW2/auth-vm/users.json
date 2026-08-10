@@ -1,0 +1,18 @@
+[
+    {
+        "username": "alice",
+        "password-hash": "4e40e8ffe0ee32fa53e139147ed559229a5930f89c2204706fc174beb36210b3"
+    },
+    {
+        "username": "bob",
+        "password-hash": "8d059c3640b97180dd2ee453e20d34ab0cb0f2eccbe87d01915a8e578a202b11"
+    },
+    {
+        "username": "admin",
+        "password-hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+    },
+    {
+        "username": "babak",
+        "password-hash": "cb81d62e0c0332bb72a422287ef4e24a952b6e295ba36d1682cd491528903436"
+    }
+]
