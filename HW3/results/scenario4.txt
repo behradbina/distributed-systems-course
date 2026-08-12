@@ -1,0 +1,22 @@
+
+>>> Running Scenario 4: Effect of Network Latency (eventual)
+
+--- Testing Latency Configuration: 0ms ---
+ [eventual] PUT Latency=446.083µs | Convergence=1.107441ms | Stale Reads=0 | Replicas Updated=1
+
+--- Testing Latency Configuration: 500ms ---
+ [eventual] PUT Latency=418.317µs | Convergence=892.332µs | Stale Reads=0 | Replicas Updated=1
+
+--- Testing Latency Configuration: 2000ms ---
+ [eventual] PUT Latency=418.12µs | Convergence=1.142366ms | Stale Reads=0 | Replicas Updated=1
+
+>>> Running Scenario 4: Effect of Network Latency (strong)
+
+--- Testing Latency Configuration: 0ms ---
+ [strong] PUT Latency=1.396267ms | Convergence=665.238µs | Stale Reads=0 | Replicas Updated=3
+
+--- Testing Latency Configuration: 500ms ---
+ [strong] PUT Latency=502.130803ms | Convergence=618.689µs | Stale Reads=0 | Replicas Updated=3
+
+--- Testing Latency Configuration: 2000ms ---
+ [strong] PUT FAILED
